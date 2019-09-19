@@ -1,0 +1,30 @@
+---
+title: "Lab 03 Notes"
+author: "Fernando Miguez"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Lab 3: Programming II
+
+\section{Good programming practices}
+
+Some advise:
+https://en.wikipedia.org/wiki/Best_coding_practices
+https://www.topcoder.com/blog/coding-best-practices/
+https://code.tutsplus.com/tutorials/top-15-best-practices-for-writing-super-readable-code--net-8118
+
+\begin{itemize}
+\item Clarity
+\item Documentation (Comments)
+\item Generality
+\item Efficiency
+\end{itemize}
+
+\section{Writing functions}
+
+R is fundamentally a functional programming language and writing good short functions that will not break easily is a good practice for writing scripts that will work as intended.

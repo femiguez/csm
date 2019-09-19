@@ -1,0 +1,363 @@
+---
+title: "Lab 04 Notes"
+author: "Fernando Miguez"
+date: "`r Sys.Date()`"
+fontsize: 12pt
+output: pdf_document
+bibliography: ../../book/crop-soil.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(BioCro)
+library(ggplot2)
+library(lattice)
+```
+
+# Lab 4: Leaf area index, light geometries and canopy light interception
+
+In this lab we will first explore different approaches to modeling
+LAI. First we can model LAI simply as a function of GDD. For example,
+[@CliftonBrown2000] modeled Miscanthus LAI as a function of
+Thermal Units using 10$^\circ$C as base temperature and a slope of 0.0102.
+
+\begin{figure}[htpb!]
+  \centering
+  \includegraphics{./figs/CB-LAI.png}
+  \caption{Leaf Area Index modeled as a function of Thermal Units accumulation}
+  \label{fig:cb-lai}
+\end{figure}
+
+To reproduce the code in this lab you would need to install the \texttt{BioCro} R package.
+
+```{r, install-biocro, eval = FALSE}
+install.packages("BioCro", repos="http://R-Forge.R-project.org")
+library(BioCro)
+```
+
+## Implementation of the simple simulation of LAI based on Thermal Time.
+
+```{r, lai-TT}
+data(cmiWet)
+names(cmiWet) <- c("year","day","solar","avgTemp")
+## Solar MJ/m2
+## Temp in F
+cmi2005 <- cmiWet[cmiWet$year == 2005,]
+
+args(RUEmod)
+
+res <- RUEmod(cmi05$solar, cmi05$avgTemp)
+
+names(res)
+
+res.d <- as.data.frame(res)
+
+ggplot(data = res.d, aes(x = AGDD, y = lai.cum)) + geom_line() + 
+  ggtitle("Leaf Area Index modeled as a function of Thermal Units accumulation")
+```
+
+The implementation of the model results in Fig \ref{fig:lai-TT}. We
+did not limit our estimate of LAI so probably our prediction is too
+high (14.9).
+
+A different approach to modeling leaf area index is based on modeling
+individual leaves as in [@Lizaso2003]. The model describes three
+processes of the life cycle of leaves articulated in a thermal time
+framework: expansion, longevity and senescence. Figure
+\ref{fig:lizaso} illustrates the idealized progression of leaf
+expansion and senescence.
+
+\begin{figure}[htpb!]
+  \centering
+  \includegraphics{./figs/Lizaso-ind-leaf.png}
+  \caption{Leaf Area Index modeled as individual leaves from Lizaso}
+  \label{fig:lizaso}
+\end{figure}
+
+These type of relationships are normally modeled using a logistic function. In this case:
+
+\[ LA_i = \frac{Ae_i}{1 + \exp(-k e_i (t - te_i)) } \]
+
+where
+
+$Ae_i$ is the final surface area of the $i$th leaf (cm$^2$), $te_i$
+the thermal time when the leaf reaches 50% of its final area (growing
+degrees after emergence, base temperature 8$^\circ$ C), and ke$_i$ is
+a unitless parameter controlling the slope of the curve. 
+
+In this model $Ae_i$ is described using the following relationship
+
+\[ Ae_i = Ae_x \exp(A_1 \dot ((LN_i-LN_x)/(LN_x - 1))^2 + A_2 ((LN_i - LN_x)/(LN_x - 1))^3) \]
+
+$Ae_x$ and $LN_x$ are the area (cm$^2$) and node of the largest leaf
+blade, and $LN_i$ the nodal position of the $i$th leaf blade. $A_1$
+and $A_2$ are shape parameters; $A_1$ controls the width of the curve
+and $A_2$ controls the degree of skewness.
+
+\begin{figure}[htpb!]
+  \centering
+  \includegraphics{./figs/Lizaso-relationships.png}
+  \caption{Leaf relationships for an individual leaf area index model}
+  \label{fig:lizaso-relation}
+\end{figure}
+
+Testing the model as implemented in \textsf{R} in the package \textsf{BioCro}.
+
+```{r, biocro}
+data(weather04)
+laiP <- laiParms(lai.method = "ind-leaf-Lizaso")
+res <- MaizeGro(weather04, plant.day = 110, emerge.day = 120, 
+                harvest.day=300, laiControl = laiP)
+```
+
+```{r, maizegro-plot, fig.cap="Individual leaf area model as implemented in R"}
+plot(res, plot.kind="LAI")
+```
+
+\section{Canopy Architecture}
+
+There are also models for canopy architecture which have considered, in detail, the complex geometries of leaf arrangements, the height of the crop, sun inclination, time of the day, etc.
+
+There are many steps in the description of the light environment in a
+canopy. The topic is also described at length in either
+[@Thornley2000] and [@Campbell1998]. Since there are
+many steps and it is hard to cover all of them in detail I will only
+describe a few of them.
+
+Steps in WIMOVAC
+
+\begin{enumerate}
+\item Separate solar radiation into direct and diffuse
+\item Calculate a canopy extinction coefficient based on sun
+  declination and canopy architecture. Diffuse radiation has a
+  different extinction coefficient.
+\item Calculate the amount of sunlit and shaded leaf area for
+  different layers of the canopy
+\item Calculate leaf-level photosynthesis and transpiration for each
+  layer taking into account the changes in relative humidity, wind,
+  light, etc. 
+\end{enumerate}
+
+Another motivation for canopy light interception is to understand the
+theory behind the derivation of a leaf area index from light
+interception data as it is done in the LI-80 Accupar ceptometer.
+
+\begin{figure}[htpb!]
+  \centering
+  \includegraphics{./figs/earth_geometry.png}
+  \caption{Earth geometry}
+  \label{fig:earth-geometry}
+\end{figure}
+
+\section{Solar radiation beam angles}
+
+Some equations:
+
+\[ \delta = -23.5 \times \cos (\frac{360  (doy + 10)}{365}  dtr) \]
+
+where $dtr$ is degrees to radians $\pi / 180$.
+
+$\delta$ is the angle which the line of the sun's rays at the earth
+makes with the equatorial plane and it is called the declination of
+the sun. For the Northern Hemisphere, maximum declination varies from
+-23.5$^{\circ}$ at the winter solstice on December 22 to
++23.5$^{\circ}$ at the summer solstice on June 22
+(Fig. \ref{fig:sun-decl}).
+
+\begin{figure}[htpb!]
+  \centering
+  \includegraphics{./figs/sun-decl.pdf}
+  \caption{Sun declination}
+  \label{fig:sun-decl}
+\end{figure}
+
+From the time of the day and the day of the year the zenith ($\theta$) angle can
+be derived
+
+\[ \cos (\theta) = \sin(\Omega) \cdot \sin(\delta) + \cos(\Omega) \cdot \cos(15 \cdot (t - t_{sn})) \] 
+
+From here our additional assumption is that a certain proportion of
+light actually reaches the surface, this is termed atmospheric
+transmissivity ($\alpha$). 
+
+\[ I_{dir} = irr \times (\alpha ^{PP_{o}/\cos(\theta)}) \times \cos(\theta) \]
+
+\[ I_{diff} = 0.5 \times irr \times (1 - \alpha ^{PP_{o}/\cos(\theta)}) \times \cos(\theta) \]
+
+where 
+
+\[ irr = \text{Solar irradiance} \]
+\[ PP_o = 10,000 / atm.P \]
+\[ atm.P = atmospheric pressure \]
+
+\begin{figure}[htpb!]
+  \centering
+  \includegraphics{./figs/Dir-Diff-Int.pdf}
+  \caption{Simulated direct and diffuse light}
+  \label{fig:dir-diff-int}
+\end{figure}
+
+\subsection{Extinction coefficient}
+
+The extinction coefficient can be modeled as a function of the zenith
+angle and canopy architecture. In this case the canopy architecture is
+described by one parameter $\chi$ which is the ratio of average
+projected area of canopy elements on horizontal and vertical surfaces. 
+
+\[ \chi = \frac{\text{horizontal projection}}{\text{vertical projection}} \]
+
+For a perfect vertical canopy $\chi = 0$ and for a perfect horizontal
+canopy $\chi$ approaches infinity.
+
+\begin{figure}[htpb!]
+  \centering
+  \includegraphics{./figs/chi-crops.png}
+  \caption{$\chi$ values for different crops}
+  \label{fig:chi-crops}
+\end{figure}
+
+\[ k = \frac{\cos(\theta) \sqrt{\chi^2 + \tan{\theta}^2}}{\chi + 1.744 (\chi + 1.183)^{-0.733}} \]
+
+\section{Code}
+
+```{r, sun-declination}
+## Calculating the sun declination
+del <- function(doy){
+  dtr <- pi / 180
+  ans <- -23.5 * cos((360 * ( doy + 10) /365) * dtr)
+  ans
+}
+
+xx <- 1:365
+yy <- del(xx)
+
+qplot(xx, yy, geom="line",
+       xlab = 'day of the year',
+       ylab = 'sun declination')
+
+## Function to calculate the cosine of the zenith angle
+coszang <- function(lat, doy, t.d, t.sn = 12){
+  
+  dtr <- pi/180
+  omega <- lat * dtr
+  deltR <- del(doy) * dtr
+  t.f <- (15 * (t.d - t.sn)) * dtr
+
+  ss <- sin(deltR) * sin(omega)
+  cc <- cos(deltR) * cos(omega)
+
+  coszenithangle <- ss + cc * cos(t.f)
+  coszenithangle <- ifelse(coszenithangle < 1e-10, 1e-10, coszenithangle) 
+  
+  coszenithangle
+}
+
+lat <- 42
+dtr <- pi / 180
+
+k <- 1
+
+doyhr.angle <- expand.grid(hour = 0:23, doy = 1:365, cos.th = NA)
+
+for(i in 1:365){
+
+  for(j in 0:23){
+
+   doyhr.angle[k,3] <- coszang(lat = lat, doy = i, t.d = j)
+
+   k <- k + 1
+ }
+}
+
+## Include plot
+
+## We can also calculate daylength, sunup and sundown
+daylen <- function(lat, doy){
+
+  dtr <- pi/180
+
+  omega <- lat * dtr
+
+  deltR <- del(doy) * dtr
+  
+  coshour <- -tan(omega) * tan(deltR)
+  coshourdeg <- (1/dtr) * coshour
+  daylength <- 2 * (1/dtr) * acos(coshour) / 15
+  sunup <- 12 - daylength / 2
+  sundown <- 12 + daylength / 2
+
+  list(daylength = daylength, sunup = sunup, sundown = sundown)
+
+}
+
+## Testing the daylength function
+
+xx <- 1:365
+yy <- daylen(lat = 42, xx)
+
+xyplot(yy$daylength + yy$sunup + yy$sundown ~ xx,
+       type = 'l',
+       lty = 1:3,
+       lwd = 2,
+       col = c('blue', 'red', 'purple'),
+       xlab = 'Day of the year',
+       ylab = 'Hours',
+       key=list(text = list(c('day length', 'sun up', 'sun down')),
+         lty = 1:3, col = c('blue', 'red', 'purple'),
+         lines = TRUE, lwd = 2))
+
+## Proportion of direct and diffuse radiation
+
+light <- function(irr=NULL, lat, doy, t.d, atm.P = 1e5){
+
+  dtr <- pi / 180
+
+  PP.o <- 1e5/atm.P
+  Solar_Constant <- 2650
+  if(missing(irr)) irr <- Solar_Constant
+  alpha <- 0.85
+
+  coszenithangle <- coszang(lat = lat, doy = doy, t.d = t.d)
+  
+  I.dir <- irr * (alpha^((PP.o)/coszenithangle)) * coszenithangle
+
+  I.diff <- 0.5 * irr * (1 - alpha ^ ((PP.o)/coszenithangle)) * coszenithangle
+
+  list(I.dir = I.dir, I.diff = I.diff)
+
+}
+
+
+doyhr.light <- expand.grid(hour = 0:23, I.dir = NA, I.diff = NA)
+
+for(j in 0:23){
+  tmp <- light(irr = 2000, lat = lat, doy = 190, t.d = j)
+  doyhr.light[j + 1,2] <- tmp$I.dir
+  doyhr.light[j + 1,3] <- tmp$I.diff
+}
+
+## the previous function is vectorized, even if you don't notice
+## So there is no need for a loop
+
+ans <- light(irr = 2000, lat = lat, doy = 190, t.d = 0:23)
+
+xyplot(I.dir + I.diff ~ 0:23 , 
+       data = ans, type = 'l')
+
+## Illustrating the ellipsoidal distribution
+
+extcoef <- function(psi, chi) {
+ ## Enter psi in degrees
+ # psi <- psi * (pi/180)
+  num <- sqrt(chi^2 + tan(psi)^2) * cos(psi)
+  den <- chi + 1.774*(chi + 1.182)^-0.733
+
+  ans <- num/den
+
+  ans
+
+}
+
+xx <- seq(0, 90) 
+yy <- extcoef(xx, 1)
+```

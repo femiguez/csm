@@ -1,0 +1,18 @@
+pheno <- function(..., rstages = c(722, 833, 960, 1600)){
+
+  stage <- -1
+  ## numbers between 0 and 99 are vegetative
+  
+  ## 1) Calculate GDD
+  ## 2) When GDD exceed a threshold we add one more leaf
+  stage <- 2
+  ## 3) When GDD exceed rstages[1] then we are at R1
+  stage <- 100
+  ## 4) When at R2
+  stage <- 200
+
+  resMat <- cbind(gdd,stage)
+
+  return(resMat)
+
+}

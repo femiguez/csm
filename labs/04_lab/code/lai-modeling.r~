@@ -1,0 +1,8 @@
+## Simple method for modeling LAI based on the RUEmod
+library(BioCro)
+
+data(cmiWet)
+names(cmiWet) <- c("year","day","solar","avgTemp")
+## Solar MJ/m2
+## Temp in F
+cmi05 <- cmiWet[cmiWet$year == 2005,]
